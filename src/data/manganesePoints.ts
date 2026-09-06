@@ -63,6 +63,10 @@ export const manganesePoints: ManganeseFeatureCollection = {
     point(22, "Kukra Pit", 80.257, 21.118, 38, 88, "High", "Ground Samples"),
     point(23, "Kumhari North", 80.341, 21.188, 45, 90, "Very High", "Borehole Data"),
     point(24, "Kumhari South", 80.329, 21.084, 48, 93, "Very High", "Ground Samples"),
+    point(25, "Tirodi Deep Seam Core", 80.182, 21.178, 64, 96, "Very High", "Borehole Data"),
+    point(26, "Ukwa High-Purity Seam", 80.148, 21.216, 62, 95, "Very High", "Borehole Data"),
+    point(27, "Kumhari South Metallurgical Basin", 80.334, 21.092, 65, 96, "Very High", "Borehole Data"),
+    point(28, "Balaghat Core Shaft", 80.238, 21.192, 61, 93, "Very High", "Borehole Data"),
   ],
 }
 
