@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkCheck, FileDown, Layers, MapPin, Sparkles, X } from "lucide-react"
+import { Activity, Bookmark, BookmarkCheck, FileDown, Layers, MapPin, Sparkles, X } from "lucide-react"
 import type { ManganeseLocation } from "../../data/manganesePoints"
 import type { ManganeseZoneProperties, AreaInterpolationResult } from "../../data/manganeseZones"
 
@@ -8,6 +8,7 @@ interface LocationCardProps {
   interpolated?: AreaInterpolationResult | null
   coordinates: [number, number] | null
   onGenerateReport: () => void
+  onOpenDashboard?: (mineSlug: string) => void
   anchor: { x: number; y: number } | null
   onClose: () => void
   pinned: boolean
@@ -21,6 +22,7 @@ function LocationCard({
   interpolated,
   coordinates,
   onGenerateReport,
+  onOpenDashboard,
   anchor,
   onClose,
   pinned,
@@ -29,6 +31,14 @@ function LocationCard({
 }: LocationCardProps) {
   // Determine title and badge
   const title = location?.locationName ?? zone?.zoneName ?? "Surveyed Concession Area"
+
+  // Derive mine slug for operations dashboard
+  const nameLower = (title + " " + (location?.source ?? "")).toLowerCase()
+  let matchedSlug = "balaghat"
+  if (nameLower.includes("tirodi")) matchedSlug = "tirodi"
+  else if (nameLower.includes("ukwa")) matchedSlug = "ukwa"
+  else if (nameLower.includes("malanjkhand")) matchedSlug = "malanjkhand"
+  else if (nameLower.includes("kandri")) matchedSlug = "kandri"
   const tierLabel = zone?.rangeLabel ?? (interpolated ? interpolated.tier.rangeLabel : null)
   const mnPercent = location
     ? `${location.mnPercent}%`
@@ -149,10 +159,20 @@ function LocationCard({
             </p>
           )}
 
+          {/* Open Dashboard Button */}
+          {onOpenDashboard && (
+            <button
+              onClick={() => onOpenDashboard(matchedSlug)}
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-teal-700 text-white py-3 rounded-xl text-xs font-bold hover:bg-teal-800 transition-colors shadow-md"
+            >
+              <Activity size={16} /> Open Mine Operations Dashboard (/{matchedSlug}/dash)
+            </button>
+          )}
+
           {/* Report Button */}
           <button
             onClick={onGenerateReport}
-            className="mt-5 w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white py-3 rounded-xl text-xs font-semibold hover:bg-gray-800 transition-colors shadow-md"
+            className="mt-3 w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white py-3 rounded-xl text-xs font-semibold hover:bg-gray-800 transition-colors shadow-md"
           >
             <FileDown size={16} /> Generate Area Concentration Report
           </button>

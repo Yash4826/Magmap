@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Flame, Layers, Mountain, SlidersHorizontal } from "lucide-react"
+import { Building2, Flame, Layers, Mountain, SlidersHorizontal } from "lucide-react"
 
 import MapView, { type MapHoverPayload, type MapSelectionPayload } from "./components/Map/MapView"
 import SearchBar from "./components/Search/SearchBar"
@@ -14,8 +14,11 @@ import {
   type AreaInterpolationResult,
   CONCENTRATION_TIERS,
 } from "./data/manganeseZones"
+import { useNavigation } from "./hooks/useNavigation"
+import { OperationsDashboard } from "./components/Dashboard/OperationsDashboard"
 
 function App() {
+  const { isDashboard, mineSlug, navigateTo } = useNavigation()
   const [filterOpen, setFilterOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [draftMinimum, setDraftMinimum] = useState(0)
@@ -184,6 +187,10 @@ function App() {
   const activeZone = isPinned ? selectedZone : hoveredZone
   const activeInterpolated = isPinned ? selectedInterpolated : hoveredInterpolated
 
+  if (isDashboard) {
+    return <OperationsDashboard mineSlug={mineSlug} onNavigate={navigateTo} />
+  }
+
   return (
     <main className="relative w-screen h-screen min-h-screen overflow-hidden font-sans">
       <MapView
@@ -269,8 +276,19 @@ function App() {
         }}
       />
 
-      {/* Search Bar */}
-      <SearchBar value={searchTerm} onChange={setSearchTerm} />
+      {/* Search Bar & Dashboard Shortcut */}
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
+        <SearchBar value={searchTerm} onChange={setSearchTerm} />
+        <button
+          onClick={() => navigateTo("/balaghat/dash")}
+          aria-label="Open Operations Dashboard"
+          title="Open Mine Operations Dashboard (/balaghat/dash)"
+          className="hidden md:flex items-center gap-2 h-14 px-4 bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-100 text-xs font-bold text-teal-800 hover:bg-gray-50 transition-all shrink-0"
+        >
+          <Building2 size={18} className="text-teal-700" />
+          <span>Operations Dashboard</span>
+        </button>
+      </div>
 
       {/* Filter Button */}
       <button
@@ -363,6 +381,7 @@ function App() {
           interpolated={activeInterpolated}
           coordinates={selectedCoordinates}
           onGenerateReport={generateReport}
+          onOpenDashboard={(slug) => navigateTo(`/${slug}/dash`)}
           anchor={!isPinned && hoverPosition ? hoverPosition : null}
           onClose={() => {
             setHoveredLocation(null)
