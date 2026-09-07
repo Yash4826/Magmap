@@ -66,7 +66,7 @@ function FilterPanel({
               <input
                 type="range"
                 min="0"
-                max="55"
+                max="75"
                 value={minimumMn}
                 onChange={(event) => onMinimumMnChange(Number(event.target.value))}
                 className="mt-2 w-full"
@@ -78,7 +78,7 @@ function FilterPanel({
               <input
                 type="range"
                 min="0"
-                max="55"
+                max="75"
                 value={maximumMn}
                 onChange={(event) => onMaximumMnChange(Number(event.target.value))}
                 className="mt-2 w-full"
@@ -89,7 +89,7 @@ function FilterPanel({
 
           <div className="mt-2 flex justify-between text-xs text-gray-500">
             <span>0%</span>
-            <span>55%</span>
+            <span>75%</span>
           </div>
         </div>
 

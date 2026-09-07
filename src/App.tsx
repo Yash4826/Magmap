@@ -1,38 +1,62 @@
 import { useEffect, useState } from "react"
-import { Flame, SlidersHorizontal } from "lucide-react"
+import { Building2, Flame, Layers, Mountain, SlidersHorizontal } from "lucide-react"
 
-import MapView from "./components/Map/MapView"
+import MapView, { type MapHoverPayload, type MapSelectionPayload } from "./components/Map/MapView"
 import SearchBar from "./components/Search/SearchBar"
 import FilterPanel from "./components/Filters/FilterPanel"
 import LocationCard from "./components/Location/LocationCard"
-import ViewSelector from "./components/Controls/ViewSelector"
+import ViewSelector, { type ViewMode } from "./components/Controls/ViewSelector"
 import LibraryMenu from "./components/Controls/LibraryMenu"
 import HeatLegend from "./components/Map/HeatLegend"
 import { locations, type ManganeseLocation } from "./data/manganesePoints"
+import {
+  type ManganeseZoneProperties,
+  type AreaInterpolationResult,
+  CONCENTRATION_TIERS,
+} from "./data/manganeseZones"
+import { useNavigation } from "./hooks/useNavigation"
+import { OperationsDashboard } from "./components/Dashboard/OperationsDashboard"
 
 function App() {
-
+  const { isDashboard, mineSlug, navigateTo } = useNavigation()
   const [filterOpen, setFilterOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [draftMinimum, setDraftMinimum] = useState(0)
   const [minimumMn, setMinimumMn] = useState(0)
-  const [draftMaximum, setDraftMaximum] = useState(55)
-  const [maximumMn, setMaximumMn] = useState(55)
+  const [draftMaximum, setDraftMaximum] = useState(75)
+  const [maximumMn, setMaximumMn] = useState(75)
   const [draftConfidence, setDraftConfidence] = useState(0)
   const [minimumConfidence, setMinimumConfidence] = useState(0)
   const [draftPotential, setDraftPotential] = useState("All")
   const [potential, setPotential] = useState("All")
   const [draftSource, setDraftSource] = useState("All")
   const [source, setSource] = useState("All")
-  const [heatmapEnabled, setHeatmapEnabled] = useState(true)
-    const [viewMode, setViewMode] = useState<"street" | "satellite" | "terrain">("street")
+
+  // Overlays
+  const [showTerrainConcentration, setShowTerrainConcentration] = useState(true)
+  const [terrainOpacity, setTerrainOpacity] = useState(0.65)
+  const [terrainMode, setTerrainMode] = useState<"discrete" | "smooth">("discrete")
+  const [heatmapEnabled, setHeatmapEnabled] = useState(false)
+  const [showZones, setShowZones] = useState(true)
+  const [showPoints, setShowPoints] = useState(true)
+  const [zoneOpacity, setZoneOpacity] = useState(0.5)
+  const [selectedTierId, setSelectedTierId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>("terrain")
+
+  // Hover & selection states
   const [hoveredLocation, setHoveredLocation] = useState<ManganeseLocation | null>(null)
+  const [hoveredZone, setHoveredZone] = useState<ManganeseZoneProperties | null>(null)
+  const [hoveredInterpolated, setHoveredInterpolated] = useState<AreaInterpolationResult | null>(null)
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null)
+
   const [selectedLocation, setSelectedLocation] = useState<ManganeseLocation | null>(null)
+  const [selectedZone, setSelectedZone] = useState<ManganeseZoneProperties | null>(null)
+  const [selectedInterpolated, setSelectedInterpolated] = useState<AreaInterpolationResult | null>(null)
   const [selectedCoordinates, setSelectedCoordinates] = useState<[number, number] | null>(null)
+
   const [savedLocations, setSavedLocations] = useState<ManganeseLocation[]>(() => {
     const stored = window.localStorage.getItem("moil-saved-locations")
-    return stored ? JSON.parse(stored) as ManganeseLocation[] : []
+    return stored ? (JSON.parse(stored) as ManganeseLocation[]) : []
   })
   const [recentLocations, setRecentLocations] = useState<ManganeseLocation[]>([])
 
@@ -40,109 +64,287 @@ function App() {
     window.localStorage.setItem("moil-saved-locations", JSON.stringify(savedLocations))
   }, [savedLocations])
 
+  // Filter locations based on filters and selected tier
   const visibleLocations = locations.filter((location) => {
     const matchesSearch = location.locationName.toLowerCase().includes(searchTerm.toLowerCase().trim())
-    return matchesSearch &&
-      location.mnPercent >= minimumMn &&
-      location.mnPercent <= maximumMn &&
-      location.confidence >= minimumConfidence &&
-      (potential === "All" || location.potential === potential) &&
-      (source === "All" || location.source === source)
-  })
+    const matchesMn = location.mnPercent >= minimumMn && location.mnPercent <= maximumMn
+    const matchesConfidence = location.confidence >= minimumConfidence
+    const matchesPotential = potential === "All" || location.potential === potential
+    const matchesSource = source === "All" || location.source === source
 
-  const focusedLocation = hoveredLocation ?? selectedLocation
+    // Tier filtering if active
+    let matchesTier = true
+    if (selectedTierId) {
+      const activeTier = CONCENTRATION_TIERS.find((t) => t.id === selectedTierId)
+      if (activeTier) {
+        matchesTier =
+          location.mnPercent >= activeTier.minPercent &&
+          (activeTier.id === "ultra-high" ? location.mnPercent <= 75 : location.mnPercent < activeTier.maxPercent)
+      }
+    }
+
+    return matchesSearch && matchesMn && matchesConfidence && matchesPotential && matchesSource && matchesTier
+  })
 
   const resetFilters = () => {
     setSearchTerm("")
     setDraftMinimum(0)
     setMinimumMn(0)
-    setDraftMaximum(55)
-    setMaximumMn(55)
+    setDraftMaximum(75)
+    setMaximumMn(75)
     setDraftConfidence(0)
     setMinimumConfidence(0)
     setDraftPotential("All")
     setPotential("All")
     setDraftSource("All")
     setSource("All")
-    setHeatmapEnabled(true)
+    setSelectedTierId(null)
+    setShowTerrainConcentration(true)
+    setTerrainMode("discrete")
+    setHeatmapEnabled(false)
+    setShowZones(true)
+    setShowPoints(true)
     setHoveredLocation(null)
+    setHoveredZone(null)
+    setHoveredInterpolated(null)
     setHoverPosition(null)
     setSelectedLocation(null)
+    setSelectedZone(null)
+    setSelectedInterpolated(null)
     setSelectedCoordinates(null)
     setFilterOpen(false)
   }
 
   const generateReport = () => {
-    const target = focusedLocation
-      ? `${focusedLocation.locationName} (${focusedLocation.latitude}, ${focusedLocation.longitude})`
-      : selectedCoordinates
-        ? `Selected coordinate (${selectedCoordinates[1].toFixed(5)}, ${selectedCoordinates[0].toFixed(5)})`
-        : "Current map view"
-    const report = [
-      "MOIL MANGANESE DETECTION REPORT",
-      `Generated: ${new Date().toISOString()}`,
-      `Target: ${target}`,
-      focusedLocation ? `Mn Grade: ${focusedLocation.mnPercent}%` : "Mn Grade: Pending field sample",
-      focusedLocation ? `Confidence: ${focusedLocation.confidence}%` : "Confidence: Not available",
-      focusedLocation ? `Potential: ${focusedLocation.potential}` : "Potential: Not classified",
-      focusedLocation ? `Source: ${focusedLocation.source}` : "Source: Map selection",
-    ].join("\n")
+    const lines: string[] = [
+      "============================================================",
+      "             MOIL MANGANESE EXPLORATION REPORT              ",
+      "============================================================",
+      `Generated: ${new Date().toLocaleString()}`,
+      `Concession Region: Balaghat - Tirodi - Ukwa Manganese Belt`,
+    ]
+
+    if (selectedZone) {
+      lines.push(
+        `\n[AREA CONCENTRATION ZONE ASSESSMENT]`,
+        `Zone Name: ${selectedZone.zoneName}`,
+        `Grade Tier: ${selectedZone.tierLabel} (${selectedZone.rangeLabel})`,
+        `Average Concentration: ${selectedZone.averageMn}% Mn`,
+        `Concentration Range: ${selectedZone.minMn}% – ${selectedZone.maxMn}% Mn`,
+        `Surface Coverage: ${selectedZone.areaKm2} sq km`,
+        `Geological Formation: ${selectedZone.geologicalFormation}`,
+        `Primary Mining Belt: ${selectedZone.primaryMineBelt}`,
+        `Geological Confidence: ${selectedZone.confidence}%`,
+      )
+    } else if (selectedLocation) {
+      lines.push(
+        `\n[BOREHOLE / SAMPLE STATION ASSAY]`,
+        `Station Name: ${selectedLocation.locationName}`,
+        `Coordinates: ${selectedLocation.latitude.toFixed(5)}° N, ${selectedLocation.longitude.toFixed(5)}° E`,
+        `Mn Concentration: ${selectedLocation.mnPercent}%`,
+        `Confidence Level: ${selectedLocation.confidence}%`,
+        `Ore Potential: ${selectedLocation.potential}`,
+        `Sample Source: ${selectedLocation.source}`,
+      )
+    }
+
+    if (selectedInterpolated) {
+      lines.push(
+        `\n[SPATIAL INTERPOLATION ESTIMATE]`,
+        `Predicted Mn Concentration: ${selectedInterpolated.estimatedMnPercent}% Mn`,
+        `Predicted Grade Tier: ${selectedInterpolated.tier.label} (${selectedInterpolated.tier.rangeLabel})`,
+        `Interpolated Confidence: ${selectedInterpolated.estimatedConfidence}%`,
+        `Nearest Ground Control: ${selectedInterpolated.nearestLocation.locationName} (${selectedInterpolated.distanceKm} km away)`,
+      )
+    }
+
+    if (selectedCoordinates) {
+      lines.push(
+        `Target Coordinates: ${selectedCoordinates[1].toFixed(5)}° N, ${selectedCoordinates[0].toFixed(5)}° E`,
+      )
+    }
+
+    lines.push(
+      `\n============================================================`,
+      `MOIL Limited Geological Exploration & Resource Database`,
+      `============================================================`,
+    )
+
+    const report = lines.join("\n")
     const url = URL.createObjectURL(new Blob([report], { type: "text/plain" }))
     const link = document.createElement("a")
     link.href = url
-    link.download = "moil-manganese-report.txt"
+    link.download = `moil-manganese-${(selectedZone?.zoneName ?? selectedLocation?.locationName ?? "area").toLowerCase().replace(/\s+/g, "-")}-report.txt`
     document.body.appendChild(link)
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
   }
 
-  return (
-    <main className="relative w-screen h-screen min-h-screen overflow-hidden">
+  // Active focused item for hover or selection
+  const isPinned = Boolean(selectedLocation || selectedZone || selectedCoordinates)
+  const activeLocation = isPinned ? selectedLocation : hoveredLocation
+  const activeZone = isPinned ? selectedZone : hoveredZone
+  const activeInterpolated = isPinned ? selectedInterpolated : hoveredInterpolated
 
+  if (isDashboard) {
+    return <OperationsDashboard mineSlug={mineSlug} onNavigate={navigateTo} />
+  }
+
+  return (
+    <main className="relative w-screen h-screen min-h-screen overflow-hidden font-sans">
       <MapView
         locations={visibleLocations}
         heatmapEnabled={heatmapEnabled}
+        showZones={showZones}
+        showTerrainConcentration={showTerrainConcentration}
+        showPoints={showPoints}
+        zoneOpacity={zoneOpacity}
+        terrainOpacity={terrainOpacity}
+        terrainMode={terrainMode}
+        selectedTierId={selectedTierId}
         viewMode={viewMode}
-        onHover={(location, position) => {
-          setHoveredLocation(location)
-          setHoverPosition(position)
+        onHover={(data: MapHoverPayload | null, position) => {
+          if (!isPinned) {
+            setHoveredLocation(data?.location ?? null)
+            setHoveredZone(data?.zone ?? null)
+            setHoveredInterpolated(data?.interpolated ?? null)
+            setHoverPosition(position)
+          }
         }}
-        onSelect={(location, coordinates) => {
+        onSelect={(payload: MapSelectionPayload) => {
           setHoveredLocation(null)
+          setHoveredZone(null)
+          setHoveredInterpolated(null)
           setHoverPosition(null)
-          setSelectedLocation(location)
-          setSelectedCoordinates(coordinates)
-          if (location) setRecentLocations((current) => [location, ...current.filter((item) => item.id !== location.id)].slice(0, 6))
+          setSelectedLocation(payload.location)
+          setSelectedZone(payload.zone)
+          setSelectedInterpolated(payload.interpolated)
+          setSelectedCoordinates(payload.coordinates)
+
+          if (payload.location) {
+            setRecentLocations((current) =>
+              [payload.location!, ...current.filter((item) => item.id !== payload.location!.id)].slice(0, 6),
+            )
+          }
         }}
       />
 
-      {heatmapEnabled && <HeatLegend />}
-      <ViewSelector value={viewMode} onChange={setViewMode} />
-      <LibraryMenu savedLocations={savedLocations} recentLocations={recentLocations} onChooseLocation={(location) => {
-        setHoveredLocation(null)
-        setSelectedLocation(location)
-        setSelectedCoordinates([location.longitude, location.latitude])
-      }} />
+      {/* Area Legend & Concentration Breakdown */}
+      <HeatLegend
+        selectedTierId={selectedTierId}
+        onSelectTier={setSelectedTierId}
+        zoneOpacity={zoneOpacity}
+        onZoneOpacityChange={setZoneOpacity}
+        showZones={showZones}
+        onToggleZones={() => setShowZones((prev) => !prev)}
+        showTerrainConcentration={showTerrainConcentration}
+        onToggleTerrainConcentration={() => setShowTerrainConcentration((prev) => !prev)}
+        terrainOpacity={terrainOpacity}
+        onTerrainOpacityChange={setTerrainOpacity}
+        terrainMode={terrainMode}
+        onToggleTerrainMode={() => setTerrainMode((prev) => (prev === "discrete" ? "smooth" : "discrete"))}
+      />
 
-      <SearchBar value={searchTerm} onChange={setSearchTerm} />
+      {/* Map View & Layer Controls */}
+      <ViewSelector
+        value={viewMode}
+        onChange={setViewMode}
+        showTerrainConcentration={showTerrainConcentration}
+        onToggleTerrainConcentration={() => setShowTerrainConcentration((prev) => !prev)}
+        terrainMode={terrainMode}
+        onToggleTerrainMode={() => setTerrainMode((prev) => (prev === "discrete" ? "smooth" : "discrete"))}
+        showZones={showZones}
+        onToggleZones={() => setShowZones((prev) => !prev)}
+        heatmapEnabled={heatmapEnabled}
+        onToggleHeatmap={() => setHeatmapEnabled((prev) => !prev)}
+        showPoints={showPoints}
+        onTogglePoints={() => setShowPoints((prev) => !prev)}
+      />
 
+      {/* Library Menu */}
+      <LibraryMenu
+        savedLocations={savedLocations}
+        recentLocations={recentLocations}
+        onChooseLocation={(location) => {
+          setHoveredLocation(null)
+          setHoveredZone(null)
+          setHoveredInterpolated(null)
+          setSelectedLocation(location)
+          setSelectedZone(null)
+          setSelectedCoordinates([location.longitude, location.latitude])
+        }}
+      />
+
+      {/* Search Bar & Dashboard Shortcut */}
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
+        <SearchBar value={searchTerm} onChange={setSearchTerm} />
+        <button
+          onClick={() => navigateTo("/balaghat/dash")}
+          aria-label="Open Operations Dashboard"
+          title="Open Mine Operations Dashboard (/balaghat/dash)"
+          className="hidden md:flex items-center gap-2 h-14 px-4 bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-100 text-xs font-bold text-teal-800 hover:bg-gray-50 transition-all shrink-0"
+        >
+          <Building2 size={18} className="text-teal-700" />
+          <span>Operations Dashboard</span>
+        </button>
+      </div>
+
+      {/* Filter Button */}
       <button
         onClick={() => setFilterOpen(true)}
         aria-label="Open filters"
-        className="absolute top-6 right-6 z-10 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center"
+        className="absolute top-4 right-4 z-10 w-14 h-14 bg-white rounded-2xl shadow-lg flex items-center justify-center text-gray-700 hover:text-black hover:bg-gray-50 transition-all border border-gray-100"
       >
         <SlidersHorizontal size={22} />
       </button>
 
+      {/* Quick Color-Coded Terrain Button */}
       <button
-        onClick={() => setHeatmapEnabled((enabled) => !enabled)}
-        aria-label={heatmapEnabled ? "Hide Manganese heatmap" : "Show Manganese heatmap"}
-        className={`absolute top-24 right-6 z-20 w-14 h-14 rounded-full shadow-lg flex items-center justify-center ${heatmapEnabled ? "bg-orange-500 text-white" : "bg-white text-gray-700"}`}
+        onClick={() => setShowTerrainConcentration((prev) => !prev)}
+        aria-label={showTerrainConcentration ? "Hide Color-Coded Terrain" : "Show Color-Coded Terrain"}
+        title={
+          showTerrainConcentration
+            ? "Hide Color-Coded Terrain (<10% Green, 10-30% Yellow, 30-60% Orange, >60% Red)"
+            : "Show Color-Coded Terrain"
+        }
+        className={`absolute top-20 right-4 z-10 w-14 h-14 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-all border border-gray-100 ${
+          showTerrainConcentration
+            ? "bg-teal-700 text-white shadow-teal-700/25"
+            : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
       >
-        <Flame size={22} />
+        <Mountain size={18} />
+        <span className="text-[9px] font-bold mt-0.5">Terrain</span>
       </button>
 
+      {/* Quick Geological Zones Toggle Button */}
+      <button
+        onClick={() => setShowZones((prev) => !prev)}
+        aria-label={showZones ? "Hide Area Concentration Zones" : "Show Area Concentration Zones"}
+        title={showZones ? "Hide Area Concentration Zones" : "Show Area Concentration Zones"}
+        className={`absolute top-36 right-4 z-10 w-14 h-14 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-all border border-gray-100 ${
+          showZones ? "bg-teal-700 text-white shadow-teal-700/20" : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <Layers size={18} />
+        <span className="text-[9px] font-bold mt-0.5">Zones</span>
+      </button>
+
+      {/* Heatmap Quick Toggle Button */}
+      <button
+        onClick={() => setHeatmapEnabled((enabled) => !enabled)}
+        aria-label={heatmapEnabled ? "Hide Manganese Heatmap" : "Show Manganese Heatmap"}
+        title={heatmapEnabled ? "Hide Manganese Heatmap" : "Show Manganese Heatmap"}
+        className={`absolute top-52 right-4 z-10 w-14 h-14 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-all border border-gray-100 ${
+          heatmapEnabled ? "bg-orange-500 text-white shadow-orange-500/20" : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <Flame size={18} />
+        <span className="text-[9px] font-bold mt-0.5">Heat</span>
+      </button>
+
+      {/* Filters Modal */}
       <FilterPanel
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
@@ -157,39 +359,52 @@ function App() {
         source={draftSource}
         onSourceChange={setDraftSource}
         onApply={() => {
-            setMinimumMn(draftMinimum)
-            setMaximumMn(draftMaximum)
+          setMinimumMn(draftMinimum)
+          setMaximumMn(draftMaximum)
           setMinimumConfidence(draftConfidence)
           setPotential(draftPotential)
           setSource(draftSource)
           setHoveredLocation(null)
+          setHoveredZone(null)
+          setHoveredInterpolated(null)
           setHoverPosition(null)
           setFilterOpen(false)
         }}
         onReset={resetFilters}
       />
 
-      {(focusedLocation || selectedCoordinates) && (
+      {/* Location / Area Inspection Card */}
+      {(activeLocation || activeZone || activeInterpolated || selectedCoordinates) && (
         <LocationCard
-          location={focusedLocation}
+          location={activeLocation}
+          zone={activeZone}
+          interpolated={activeInterpolated}
           coordinates={selectedCoordinates}
           onGenerateReport={generateReport}
-          anchor={hoveredLocation ? hoverPosition : null}
+          onOpenDashboard={(slug) => navigateTo(`/${slug}/dash`)}
+          anchor={!isPinned && hoverPosition ? hoverPosition : null}
           onClose={() => {
             setHoveredLocation(null)
+            setHoveredZone(null)
+            setHoveredInterpolated(null)
             setHoverPosition(null)
             setSelectedLocation(null)
+            setSelectedZone(null)
+            setSelectedInterpolated(null)
             setSelectedCoordinates(null)
           }}
-          pinned={Boolean(selectedLocation || selectedCoordinates)}
-          saved={Boolean(focusedLocation && savedLocations.some((item) => item.id === focusedLocation.id))}
+          pinned={isPinned}
+          saved={Boolean(activeLocation && savedLocations.some((item) => item.id === activeLocation.id))}
           onToggleSaved={() => {
-            if (!focusedLocation) return
-            setSavedLocations((current) => current.some((item) => item.id === focusedLocation.id) ? current.filter((item) => item.id !== focusedLocation.id) : [...current, focusedLocation])
+            if (!activeLocation) return
+            setSavedLocations((current) =>
+              current.some((item) => item.id === activeLocation.id)
+                ? current.filter((item) => item.id !== activeLocation.id)
+                : [...current, activeLocation],
+            )
           }}
         />
       )}
-
     </main>
   )
 }
